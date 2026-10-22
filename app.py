@@ -373,12 +373,11 @@ st.divider()
 # ---------------------------------------------------------------------------
 st.markdown("## 🗺️ Navigation Guide")
 pages = [
-    ("🔬", "Sensor Explorer",       "Interactive time-series charts and statistical summaries."),
-    ("🔷", "HMM State Inference",   "Inferred hidden states, posterior probabilities, transition matrix."),
-    ("📉", "Machine Health",        "Per-machine degradation timeline and alert indicator."),
-    ("📊", "Model Evaluation",      "Accuracy, confusion matrix, AIC/BIC comparison."),
-    ("🎓", "Algorithm Playground",  "Step-by-step Forward, Backward, Viterbi on small examples."),
-    ("⚙️", "Model Configuration",   "Tune HMM parameters and retrain the model."),
+    ("🔬", "Sensor Explorer",     "Interactive time-series charts, distributions, and sensor correlations."),
+    ("🔷", "HMM State Inference", "Viterbi state timeline, posterior heatmap, transition matrix, dwell times."),
+    ("📉", "Machine Health",      "Per-machine degradation trajectory, alert level, and state-change events."),
+    ("📊", "Model Evaluation",    "Log-likelihood, AIC/BIC, supervised accuracy, F1, confusion matrix."),
+    ("⚙️", "Model Configuration", "Tune HMM hyperparameters, choose features, and retrain the model."),
 ]
 
 cols = st.columns(3)

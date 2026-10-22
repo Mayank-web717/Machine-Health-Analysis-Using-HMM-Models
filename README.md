@@ -1,6 +1,6 @@
 # Predictive Machine Health Monitoring Using Hidden Markov Models
 
-> **B.Tech Computer Science — Machine Learning Project**
+> **B.Tech Computer Science — Machine Learning Project**  
 > **Unit 4: Hidden Markov Models**
 
 ---
@@ -17,7 +17,7 @@ The project is built as a fully interactive **Streamlit dashboard** with impleme
 
 ## Problem Statement
 
-Industrial machines fail over time. Traditional threshold-based monitoring misses gradual degradation because individual sensor readings remain within bounds even as the machine transitions through distinct operating regimes. 
+Industrial machines fail over time. Traditional threshold-based monitoring misses gradual degradation because individual sensor readings remain within bounds even as the machine transitions through distinct operating regimes.
 
 **HMMs model this directly**: the machine's operating condition is a _hidden_ state that probabilistically generates sensor observations. By learning these hidden states from data, the model can:
 1. Infer the most likely current state (Viterbi decoding)
@@ -44,18 +44,19 @@ Industrial machines fail over time. Traditional threshold-based monitoring misse
 ## System Architecture
 
 ```
-machine-health-hmm/
+HMM Unit 4/
 ├── app.py                    ← Streamlit entry point (Overview page)
 ├── requirements.txt
-├── README.md
+├── README.md                 ← This file (quick-start + theory)
+├── PROJECT_GUIDE.md          ← Full guide: every page, algorithm, dataset
 ├── data/
 │   ├── sample_sensor_data.csv   ← Auto-generated on first run
 │   └── README.md
 ├── src/
 │   ├── data_loader.py        ← Dataset loading, synthetic generation, validation
 │   ├── preprocessing.py      ← StandardScaler, train/val/test split, sequence prep
-│   ├── hmm_model.py          ← Pure NumPy/SciPy Gaussian HMM (no C++ compiler needed), multi-init, AIC/BIC
-│   ├── hmm_algorithms.py     ← Educational: Forward, Backward, FB, Viterbi, BW-step, underflow demo
+│   ├── hmm_model.py          ← Pure NumPy/SciPy Gaussian HMM (no C++ compiler needed)
+│   ├── hmm_algorithms.py     ← Educational: Forward, Backward, FB, Viterbi, BW-step
 │   ├── state_interpretation.py  ← Transparent state labeling from emission means
 │   ├── evaluation.py         ← Supervised/unsupervised metrics, dwell times
 │   └── visualizations.py     ← Plotly chart factory (dark navy theme)
@@ -64,8 +65,7 @@ machine-health-hmm/
 │   ├── 2_HMM_State_Inference.py
 │   ├── 3_Machine_Health.py
 │   ├── 4_Model_Evaluation.py
-│   ├── 5_Algorithm_Playground.py
-│   └── 6_Model_Configuration.py
+│   └── 5_Model_Configuration.py
 └── tests/
     ├── test_data_loader.py
     ├── test_hmm_algorithms.py
@@ -123,14 +123,17 @@ P(O | λ) = Σᵢ α_T(i)
 ψ_t(j) = argmax_i [δ_{t-1}(i) + log A_{ij}]
 ```
 
-### Scaling Factors
+### Scaling Factors (Numerical Stability)
 
-To prevent numerical underflow:
+To prevent numerical underflow in long sequences:
 ```
-c_t = 1 / Σᵢ α_t(i)
-α̂_t(i) = c_t · α_t(i)
-log P(O | λ) = -Σ_t log c_t
+c_t = Σᵢ α_t(i)          ← normalising factor at step t
+α̂_t(i) = α_t(i) / c_t   ← scaled forward probability
+log P(O | λ) = Σ_t log c_t
 ```
+
+Without scaling, α_t(i) ≈ (0.3)^100 ≈ 5×10⁻⁵³ → underflows to 0.  
+Scaling keeps all values in [0, 1] at every step.
 
 ### Baum-Welch EM
 
@@ -138,9 +141,112 @@ log P(O | λ) = -Σ_t log c_t
 
 **M-Step:**
 ```
-π*_i = γ₁(i)
+π*_i  = γ₁(i)
 A*_{ij} = Σ_t ξ_t(i,j) / Σ_t γ_t(i)
-μ*_i = Σ_t γ_t(i) · O_t / Σ_t γ_t(i)   [Gaussian emission mean]
+μ*_i  = Σ_t γ_t(i) · O_t / Σ_t γ_t(i)   [Gaussian emission mean]
+Σ*_i  = Σ_t γ_t(i)·(O_t−μ*_i)(O_t−μ*_i)ᵀ / Σ_t γ_t(i)
+```
+
+Iterates until `|ΔLL| < tolerance`. Guaranteed non-decreasing log-likelihood per step.
+
+---
+
+## Algorithm Playground (Reference)
+
+The following interactive demonstrations are documented here as reference. They were previously available as a dedicated Streamlit page and can be run directly from `src/hmm_algorithms.py`.
+
+### Example HMMs Included
+
+| Name | States | Observations | Description |
+|------|--------|--------------|-------------|
+| Weather-Activity (2-state) | Sunny, Rainy | Walk, Shop, Clean | Classic Rabiner 1989 |
+| Machine Health (3-state) | Healthy, Degrading, Critical | Low, Medium, High vibration | Project domain |
+| Coin-Bias (2-state) | Fair, Loaded | Heads, Tails | Simplest illustrative HMM |
+
+### Forward Algorithm Demo
+
+Given HMM parameters λ = (π, A, B) and an observation sequence O:
+
+```python
+from src.hmm_algorithms import forward_algorithm, forward_algorithm_scaled
+
+# Unscaled (may underflow for long sequences)
+alpha, log_prob = forward_algorithm(pi, A, B, obs)
+
+# Scaled (numerically stable)
+alpha_hat, c, log_prob = forward_algorithm_scaled(pi, A, B, obs)
+```
+
+**Output:** α table (T × N), log P(O|λ)
+
+### Backward & Forward-Backward Demo
+
+```python
+from src.hmm_algorithms import forward_backward
+
+result = forward_backward(pi, A, B, obs)
+# result["gamma"]   — (T, N) posterior state probabilities
+# result["xi"]      — (T-1, N, N) joint transition posteriors
+# result["log_prob"] — log P(O|λ)
+```
+
+**Marginal Posterior Decoding** (picks argmax γ_t independently per step):
+```python
+from src.hmm_algorithms import marginal_decoding
+best_states = marginal_decoding(gamma)
+```
+
+### Viterbi Demo
+
+```python
+from src.hmm_algorithms import viterbi
+
+result = viterbi(pi, A, B, obs)
+# result["best_path"]  — most likely state sequence
+# result["delta"]      — (T, N) DP log-score table
+# result["psi"]        — (T, N) backpointer table
+# result["log_prob"]   — log P(S* | O, λ)
+```
+
+**Viterbi vs Marginal Decoding:**
+- Viterbi finds the globally most-likely path (joint maximum)
+- Marginal decoding maximises each step independently (marginal maximum)
+- They can disagree — marginal may produce transitions with near-zero probability in A
+
+### Scaling Factors Demo
+
+```python
+from src.hmm_algorithms import underflow_demo
+
+result = underflow_demo(pi, A, B, long_obs)
+# result["underflow_occurred"]  — bool
+# result["log_prob_scaled"]     — correct
+# result["log_prob_unscaled"]   — may be -inf
+# result["scaling_c"]           — c_t values over time
+```
+
+### Baum-Welch One-Step Demo
+
+```python
+from src.hmm_algorithms import baum_welch_one_step, forward_backward
+
+ll_before = forward_backward(pi, A, B, obs)["log_prob"]
+pi_new, A_new, B_new = baum_welch_one_step(pi, A, B, obs)
+ll_after  = forward_backward(pi_new, A_new, B_new, obs)["log_prob"]
+# EM guarantee: ll_after >= ll_before (up to numerical precision)
+```
+
+### Mathematical Summary Table
+
+```
+Algorithm          | Problem       | Complexity  | Output
+-------------------|---------------|-------------|---------------------------
+Forward (unscaled) | Evaluation    | O(T·N²)     | α, log P(O|λ)
+Forward (scaled)   | Evaluation    | O(T·N²)     | α̂, c, log P(O|λ)
+Backward           | (helper)      | O(T·N²)     | β̂
+Forward-Backward   | Smoothing     | O(T·N²)     | γ, ξ, log P(O|λ)
+Viterbi            | Decoding      | O(T·N²)     | best path, δ, ψ
+Baum-Welch         | Learning      | O(I·T·N²)   | updated λ = (π, A, B/μ/Σ)
 ```
 
 ---
@@ -152,9 +258,10 @@ A*_{ij} = Σ_t ξ_t(i,j) / Σ_t γ_t(i)
 - **4 sensor channels**: temperature, vibration, pressure, rotation_speed
 - **Ground-truth labels** (0=Healthy, 1=Degrading, 2=Critical) — used for evaluation only
 - Generated reproducibly with `numpy.random.default_rng(42)`
+- Physics-inspired: temperature and vibration increase as health degrades; pressure and rotation_speed decrease
 
 ### Real Dataset (Optional)
-The project is designed to accept the **NASA CMAPSS Turbofan Degradation Dataset**:
+The project accepts the **NASA CMAPSS Turbofan Degradation Dataset**:
 - URL: https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/
 - The CSV upload feature accepts any properly formatted sensor CSV
 
@@ -224,13 +331,8 @@ The application will open at http://localhost:8501
 
 ---
 
-## Screenshots
+## Further Reading
 
-*(Run the application and capture screenshots here)*
-
-- Overview page with metrics
-- Sensor Explorer with time-series
-- HMM State Inference with posterior heatmap
-- Machine Health with alert indicator
-- Algorithm Playground forward table
-- Model Configuration training results
+- [Rabiner, L.R. (1989). A Tutorial on Hidden Markov Models](https://www.cs.ubc.ca/~murphyk/Bayes/rabiner.pdf)
+- [Viterbi, A.J. (1967). Error bounds for convolutional codes](https://ieeexplore.ieee.org/document/1054010)
+- [Dempster et al. (1977). Maximum Likelihood from Incomplete Data via the EM Algorithm](https://www.jstor.org/stable/2984875)
